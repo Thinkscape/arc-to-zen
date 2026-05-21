@@ -2,6 +2,7 @@
 """Sync Arc space icons into Zen workspaces."""
 
 import json
+import argparse
 import logging
 import shutil
 from datetime import datetime
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from zen_sessions_importer_v4 import read_mozilla_lz4, resolve_zen_profile, write_mozilla_lz4
+from src.profile_paths import arc_json_path
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -17,8 +19,8 @@ logger = logging.getLogger(__name__)
 ZEN_SELECTABLE_ICON_BASE = "chrome://browser/skin/zen-icons/selectable"
 
 
-def load_arc_sidebar() -> Dict[str, Any]:
-    path = Path.home() / "Library" / "Application Support" / "Arc" / "StorableSidebar.json"
+def load_arc_sidebar(arc_profile: str | Path | None = None) -> Dict[str, Any]:
+    path = arc_json_path("StorableSidebar.json", arc_profile)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -38,8 +40,8 @@ def zen_icon_from_arc_icon_type(icon_type: Optional[Dict[str, Any]]) -> Optional
     return None
 
 
-def arc_workspace_icons() -> Dict[str, str]:
-    sidebar = load_arc_sidebar()
+def arc_workspace_icons(arc_profile: str | Path | None = None) -> Dict[str, str]:
+    sidebar = load_arc_sidebar(arc_profile)
     space_models = sidebar.get("firebaseSyncState", {}).get("syncData", {}).get("spaceModels", [])
     icons = {}
 
@@ -101,8 +103,19 @@ def update_file(path: Path, icons: Dict[str, str], timestamp: str) -> int:
 
 
 def main() -> bool:
-    profile = resolve_zen_profile()
-    icons = arc_workspace_icons()
+    parser = argparse.ArgumentParser(description="Sync Arc space icons into Zen workspaces.")
+    parser.add_argument(
+        "--arc-profile",
+        help="Path to the Arc profile root containing StorableSidebar.json.",
+    )
+    parser.add_argument(
+        "--zen-profile",
+        help="Path to a Zen profile directory, or a Zen root containing profiles.ini.",
+    )
+    args = parser.parse_args()
+
+    profile = resolve_zen_profile(args.zen_profile)
+    icons = arc_workspace_icons(args.arc_profile)
     logger.info(f"Loaded {len(icons)} Arc workspace icons")
     for name, icon in icons.items():
         logger.info(f"   {name}: {icon}")

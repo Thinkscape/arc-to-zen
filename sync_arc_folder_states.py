@@ -2,6 +2,7 @@
 """Sync Arc pinned-folder expanded/collapsed state into Zen."""
 
 import json
+import argparse
 import logging
 import shutil
 from datetime import datetime
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
 from zen_sessions_importer_v4 import read_mozilla_lz4, resolve_zen_profile, write_mozilla_lz4
+from src.profile_paths import arc_json_path
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -17,8 +19,8 @@ logger = logging.getLogger(__name__)
 FolderKey = Tuple[str, Tuple[str, ...]]
 
 
-def load_arc_json(name: str) -> Dict[str, Any]:
-    path = Path.home() / "Library" / "Application Support" / "Arc" / name
+def load_arc_json(name: str, arc_profile: str | Path | None = None) -> Dict[str, Any]:
+    path = arc_json_path(name, arc_profile)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -53,9 +55,9 @@ def section_children(container_ids: list[str], marker: str, items_lookup: Dict[s
     return children
 
 
-def arc_folder_states() -> Dict[FolderKey, bool]:
-    sidebar = load_arc_json("StorableSidebar.json")
-    windows = load_arc_json("StorableWindows.json")
+def arc_folder_states(arc_profile: str | Path | None = None) -> Dict[FolderKey, bool]:
+    sidebar = load_arc_json("StorableSidebar.json", arc_profile)
+    windows = load_arc_json("StorableWindows.json", arc_profile)
     expanded_ids = expanded_arc_item_ids(windows)
 
     space_models = sidebar.get("firebaseSyncState", {}).get("syncData", {}).get("spaceModels", [])
@@ -185,8 +187,19 @@ def update_file(path: Path, states: Dict[FolderKey, bool], timestamp: str) -> tu
 
 
 def main() -> bool:
-    profile = resolve_zen_profile()
-    states = arc_folder_states()
+    parser = argparse.ArgumentParser(description="Sync Arc pinned-folder expanded/collapsed state into Zen.")
+    parser.add_argument(
+        "--arc-profile",
+        help="Path to the Arc profile root containing StorableSidebar.json.",
+    )
+    parser.add_argument(
+        "--zen-profile",
+        help="Path to a Zen profile directory, or a Zen root containing profiles.ini.",
+    )
+    args = parser.parse_args()
+
+    profile = resolve_zen_profile(args.zen_profile)
+    states = arc_folder_states(args.arc_profile)
     expanded = sum(1 for value in states.values() if value)
     logger.info(f"Loaded Arc states for {len(states)} pinned folders: {expanded} expanded, {len(states) - expanded} collapsed")
 

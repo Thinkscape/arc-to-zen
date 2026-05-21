@@ -2,6 +2,7 @@
 """Copy cached Arc favicons into Zen session tab images."""
 
 import base64
+import argparse
 import json
 import logging
 import shutil
@@ -11,14 +12,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from zen_sessions_importer_v4 import read_mozilla_lz4, resolve_zen_profile, write_mozilla_lz4
+from src.profile_paths import arc_favicons_paths
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def arc_favicons_uri() -> str:
-    path = Path.home() / "Library" / "Application Support" / "Arc" / "User Data" / "Default" / "Favicons"
+def arc_favicons_uri(path: Path) -> str:
     return "file:" + str(path).replace(" ", "%20") + "?mode=ro&immutable=1"
 
 
@@ -67,7 +68,7 @@ def best_icon_for_url(con: sqlite3.Connection, url: str) -> Optional[str]:
     return data_uri(min(rows, key=score)[2])
 
 
-def load_arc_icons(export_file: Path) -> Dict[str, str]:
+def load_arc_icons(export_file: Path, arc_profile: str | Path | None = None) -> Dict[str, str]:
     with open(export_file, encoding="utf-8") as f:
         arc_data = json.load(f)
 
@@ -78,16 +79,21 @@ def load_arc_icons(export_file: Path) -> Dict[str, str]:
             if url:
                 urls.append(url)
 
-    con = sqlite3.connect(arc_favicons_uri(), uri=True)
-    try:
-        icons = {}
-        for url in sorted(set(urls)):
-            icon = best_icon_for_url(con, url)
-            if icon:
-                icons[url] = icon
-        return icons
-    finally:
-        con.close()
+    icons = {}
+    for favicons_path in arc_favicons_paths(arc_profile):
+        logger.info(f"Reading Arc favicons: {favicons_path}")
+        con = sqlite3.connect(arc_favicons_uri(favicons_path), uri=True)
+        try:
+            for url in sorted(set(urls)):
+                if url in icons:
+                    continue
+                icon = best_icon_for_url(con, url)
+                if icon:
+                    icons[url] = icon
+        finally:
+            con.close()
+
+    return icons
 
 
 def tab_url(tab: Dict[str, Any]) -> Optional[str]:
@@ -145,13 +151,29 @@ def update_lz4_file(path: Path, icons: Dict[str, str], timestamp: str) -> int:
 
 
 def main() -> bool:
-    export_file = Path("arc_pinned_tabs_export.json")
+    parser = argparse.ArgumentParser(description="Copy Arc favicon images into migrated Zen tabs.")
+    parser.add_argument(
+        "--arc-profile",
+        help="Path to the Arc profile root containing StorableSidebar.json.",
+    )
+    parser.add_argument(
+        "--zen-profile",
+        help="Path to a Zen profile directory, or a Zen root containing profiles.ini.",
+    )
+    parser.add_argument(
+        "--export-file",
+        default="arc_pinned_tabs_export.json",
+        help="Path to the Arc export JSON produced by arc_pinned_tab_extractor.py.",
+    )
+    args = parser.parse_args()
+
+    export_file = Path(args.export_file).expanduser()
     if not export_file.exists():
         logger.error("Arc export not found. Run src/arc_pinned_tab_extractor.py first.")
         return False
 
-    profile = resolve_zen_profile()
-    icons = load_arc_icons(export_file)
+    profile = resolve_zen_profile(args.zen_profile)
+    icons = load_arc_icons(export_file, args.arc_profile)
     logger.info(f"Loaded {len(icons)} Arc favicon images for migrated URLs")
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")

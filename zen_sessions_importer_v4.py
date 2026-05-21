@@ -5,7 +5,6 @@ Zen Sessions Importer v4 - Proper Nested Folders
 Supports nested folder structures with correct parentId relationships.
 """
 
-import lz4.block
 import json
 import logging
 import struct
@@ -17,9 +16,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
 import shutil
-import configparser
-import os
 import copy
+
+from src.profile_paths import resolve_zen_profile as resolve_zen_profile_path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -36,6 +35,8 @@ BOOKMARK_ROOT_GUIDS = {
 
 def read_mozilla_lz4(filepath: Path) -> Dict[str, Any]:
     """Read Mozilla's LZ4-compressed JSON file."""
+    import lz4.block
+
     with open(filepath, 'rb') as f:
         magic = f.read(8)
         if magic != b'mozLz40\x00':
@@ -65,6 +66,8 @@ def backup_file(filepath: Path, label: str = "backup", timestamp: Optional[str] 
 
 def write_mozilla_lz4(filepath: Path, data: Dict[str, Any]):
     """Write data in Mozilla's LZ4-compressed JSON format."""
+    import lz4.block
+
     backup_file(filepath)
 
     json_bytes = json.dumps(data, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
@@ -383,56 +386,9 @@ def add_empty_folder_anchors(
     return tab_index
 
 
-def resolve_zen_profile() -> Path:
-    """Resolve the target Zen profile from env vars, installs.ini, or profiles.ini."""
-    zen_dir = Path.home() / "Library" / "Application Support" / "zen"
-    profiles_dir = zen_dir / "Profiles"
-
-    requested_path = os.environ.get("ZEN_PROFILE_PATH")
-    if requested_path:
-        profile = Path(requested_path).expanduser()
-        if profile.is_dir():
-            return profile
-        raise FileNotFoundError(f"ZEN_PROFILE_PATH does not exist: {profile}")
-
-    requested_name = os.environ.get("ZEN_PROFILE_NAME")
-    if requested_name:
-        for profile in profiles_dir.iterdir():
-            if profile.is_dir() and requested_name in profile.name:
-                return profile
-        raise FileNotFoundError(f"ZEN_PROFILE_NAME not found: {requested_name}")
-
-    installs_ini = zen_dir / "installs.ini"
-    if installs_ini.exists():
-        config = configparser.ConfigParser()
-        config.read(installs_ini)
-        for section in config.sections():
-            default = config.get(section, "Default", fallback=None)
-            if default:
-                profile = zen_dir / default if not Path(default).is_absolute() else Path(default)
-                if profile.is_dir():
-                    return profile
-
-    profiles_ini = zen_dir / "profiles.ini"
-    if profiles_ini.exists():
-        config = configparser.ConfigParser()
-        config.read(profiles_ini)
-        for section in config.sections():
-            if not section.startswith("Profile"):
-                continue
-            if config.get(section, "Default", fallback="0") == "1":
-                profile_path = config.get(section, "Path", fallback=None)
-                is_relative = config.get(section, "IsRelative", fallback="1") == "1"
-                if profile_path:
-                    profile = zen_dir / profile_path if is_relative else Path(profile_path)
-                    if profile.is_dir():
-                        return profile
-
-    for profile in profiles_dir.iterdir():
-        if profile.is_dir() and (profile / "zen-sessions.jsonlz4").exists():
-            return profile
-
-    raise FileNotFoundError("No Zen profile with zen-sessions.jsonlz4 found")
+def resolve_zen_profile(profile_path: str | Path | None = None) -> Path:
+    """Resolve the target Zen profile from args, env vars, installs.ini, or profiles.ini."""
+    return resolve_zen_profile_path(profile_path)
 
 
 def reset_session_window_state(window: Dict[str, Any]):
@@ -557,6 +513,15 @@ def sync_sessionstore(profile: Path, zen_data: Dict[str, Any], nuke: bool = Fals
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Import Arc sidebar data into Zen session files.")
     parser.add_argument(
+        "--zen-profile",
+        help="Path to a Zen profile directory, or a Zen root containing profiles.ini.",
+    )
+    parser.add_argument(
+        "--arc-export",
+        default="arc_pinned_tabs_export.json",
+        help="Path to the Arc export JSON produced by arc_pinned_tab_extractor.py.",
+    )
+    parser.add_argument(
         "--nuke",
         action="store_true",
         help="Before importing, remove all Zen tabs, folders, pins, tab groups, closed tab state, and regular bookmarks.",
@@ -574,7 +539,7 @@ def main():
     args = parse_args()
 
     try:
-        profile = resolve_zen_profile()
+        profile = resolve_zen_profile(args.zen_profile)
     except Exception as e:
         logger.error(f"❌ Zen profile not found: {e}")
         return False
@@ -592,7 +557,7 @@ def main():
         logger.error(f"❌ Zen session file not found: {sessions_file}")
         return False
 
-    arc_export_file = Path("arc_pinned_tabs_export.json")
+    arc_export_file = Path(args.arc_export).expanduser()
 
     if not arc_export_file.exists():
         logger.error("❌ Arc export not found. Run arc_pinned_tab_extractor.py first.")

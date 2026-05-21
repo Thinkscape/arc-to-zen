@@ -7,12 +7,16 @@ This provides the actual user-organized pinned tabs, not browsing history.
 """
 
 import json
+import argparse
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 import logging
-import os
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.profile_paths import resolve_arc_profile
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -64,13 +68,9 @@ class ArcSpace:
 class ArcPinnedTabExtractor:
     """Extracts pinned tabs with folder structure from Arc's StorableSidebar.json."""
 
-    def __init__(self):
-        if os.name == "nt":
-            self.home_dir = Path(os.path.expanduser("~\\"))
-            self.arc_sidebar_file = self.home_dir / "AppData/Local/Packages/TheBrowserCompany.Arc_ttt1ap7aakyb4/LocalCache/Local/Arc/StorableSidebar.json"
-        else:
-            self.home_dir = Path.home()
-            self.arc_sidebar_file = self.home_dir / "Library/Application Support/Arc/StorableSidebar.json"
+    def __init__(self, arc_profile_path: str | Path | None = None):
+        self.arc_profile = resolve_arc_profile(arc_profile_path)
+        self.arc_sidebar_file = self.arc_profile / "StorableSidebar.json"
 
     def extract_pinned_tabs(self) -> List[ArcSpace]:
         """Extract all pinned tabs organized by spaces with folder structure."""
@@ -960,10 +960,22 @@ class ArcPinnedTabExtractor:
 
 def main():
     """CLI interface for Arc pinned tab extraction."""
+    parser = argparse.ArgumentParser(description="Extract Arc sidebar data for Zen migration.")
+    parser.add_argument(
+        "--arc-profile",
+        help="Path to the Arc profile root containing StorableSidebar.json. Defaults to ARC_PROFILE_PATH or the platform default.",
+    )
+    parser.add_argument(
+        "--output",
+        default="arc_pinned_tabs_export.json",
+        help="Path to write the extracted Arc export JSON.",
+    )
+    args = parser.parse_args()
+
     print("📌 Arc Pinned Tab Extractor")
     print("=" * 40)
 
-    extractor = ArcPinnedTabExtractor()
+    extractor = ArcPinnedTabExtractor(args.arc_profile)
     arc_spaces = extractor.extract_pinned_tabs()
 
     if not arc_spaces:
@@ -971,7 +983,7 @@ def main():
         return
 
     # Export to JSON
-    output_file = Path("arc_pinned_tabs_export.json")
+    output_file = Path(args.output).expanduser()
     success = extractor.export_to_json(arc_spaces, output_file)
 
     if success:
