@@ -144,7 +144,7 @@ def _profile_from_ini(zen_root: Path) -> Optional[Path]:
     installs_ini = zen_root / "installs.ini"
     if installs_ini.exists():
         config = configparser.ConfigParser()
-        config.read(installs_ini)
+        config.read(installs_ini, encoding="utf-8")
         for section in config.sections():
             default = config.get(section, "Default", fallback=None)
             if default:
@@ -155,7 +155,7 @@ def _profile_from_ini(zen_root: Path) -> Optional[Path]:
     profiles_ini = zen_root / "profiles.ini"
     if profiles_ini.exists():
         config = configparser.ConfigParser()
-        config.read(profiles_ini)
+        config.read(profiles_ini, encoding="utf-8")
         for section in config.sections():
             if not section.startswith("Profile"):
                 continue
@@ -181,7 +181,7 @@ def _profiles_from_ini(zen_root: Path) -> list[Path]:
         return profiles
 
     config = configparser.ConfigParser()
-    config.read(profiles_ini)
+    config.read(profiles_ini, encoding="utf-8")
     for section in config.sections():
         if not section.startswith("Profile"):
             continue

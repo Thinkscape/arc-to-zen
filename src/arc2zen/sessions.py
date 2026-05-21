@@ -581,7 +581,7 @@ def import_arc_export(
         return False
 
     # Load Arc export
-    with open(arc_export_file, 'r') as f:
+    with open(arc_export_file, "r", encoding="utf-8") as f:
         arc_data = json.load(f)
 
     total_tabs = sum(s['total_pinned_tabs'] for s in arc_data['spaces'])
