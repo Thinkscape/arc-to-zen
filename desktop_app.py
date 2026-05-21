@@ -502,28 +502,14 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     def confirm_operation(self, config: MigrationConfig) -> bool:
-        options = [
-            "Core tabs/folders/workspaces",
-            "Favicons" if config.favicons else None,
-            "Folder open/closed state" if config.folder_states else None,
-            "Workspace icons" if config.workspace_icons else None,
-            "Workspace colors/themes" if config.workspace_themes else None,
-        ]
-        details = "\n".join(
-            [
-                "Pending operation:",
-                "",
-                f"Arc profile: {config.arc_profile}",
-                f"Zen profile: {config.zen_profile}",
-                f"Nuke Zen first: {'YES' if config.nuke else 'no'}",
-                "",
-                "Selected migration steps:",
-                *[f"- {option}" for option in options if option],
-            ]
-        )
-
         icon = QMessageBox.Warning if config.nuke else QMessageBox.Question
-        response = QMessageBox(icon, "Confirm migration", details, QMessageBox.Cancel | QMessageBox.Ok, self)
+        response = QMessageBox(
+            icon,
+            "Confirm migration",
+            "Are you sure you want to start the migration?",
+            QMessageBox.Cancel | QMessageBox.Ok,
+            self,
+        )
         response.setDefaultButton(QMessageBox.Cancel if config.nuke else QMessageBox.Ok)
         return response.exec() == QMessageBox.Ok
 
