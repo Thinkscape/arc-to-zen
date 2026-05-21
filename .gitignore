@@ -21,6 +21,7 @@ wheels/
 *.egg
 
 # Virtual environments
+.venv/
 venv/
 ENV/
 env/
@@ -40,7 +41,10 @@ arc_bookmarks_export.json
 arc_pinned_tabs_export.json
 test_export.json
 *.log
+*.bak
 *.backup.*
+*.codex-*backup-*
+snapshots/
 
 # Migration script generated files
 workspace_uuid_mapping.json
