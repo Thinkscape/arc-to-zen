@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "arc2zen"
 version = "0.2.0"
-description = "Migrate Arc Browser sidebar data into Zen Browser."
+description = "Migrate all Arc workspaces data into Zen."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

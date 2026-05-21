@@ -1,8 +1,8 @@
 # Arc to Zen
 
-![Arc to Zen desktop app](docs/app-screenshot.png)
+![Arc to Zen full migration](docs/full-migration.png)
 
-Move Arc Browser sidebar data into Zen Browser.
+Migrate all Arc workspaces data into Zen.
 
 ## Download
 

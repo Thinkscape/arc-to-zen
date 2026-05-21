@@ -1,7 +1,7 @@
 # AGENTS.md
 
-This repository contains a Python package for migrating Arc Browser sidebar data
-into Zen Browser.
+This repository contains a Python package to migrate all Arc workspaces data
+into Zen.
 
 ## Current Migration Flow
 
