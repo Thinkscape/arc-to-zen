@@ -259,7 +259,7 @@ class MainWindow(QMainWindow):
         self.workspace_icons_check.setChecked(True)
         self.workspace_themes_check = QCheckBox("Workspace colors/themes")
         self.workspace_themes_check.setChecked(True)
-        self.nuke_check = QCheckBox("Nuke Zen profile first")
+        self.nuke_check = QCheckBox("Clear out Zen profile before migration (backups will be saved next to changed files)")
         self.nuke_check.setToolTip("Deletes existing Zen tabs, folders, pins, groups, closed-tab state, and regular bookmarks before importing.")
 
         self.progress = QProgressBar()
@@ -286,11 +286,11 @@ class MainWindow(QMainWindow):
 
         profile_group = QGroupBox("Profiles")
         profile_layout = QFormLayout(profile_group)
-        profile_layout.addRow("Arc profile root", self._path_row(self.arc_combo, self.browse_arc))
-        profile_layout.addRow("Zen target profile", self._path_row(self.zen_combo, self.browse_zen))
+        profile_layout.addRow("Source: Arc data folder", self._path_row(self.arc_combo, self.browse_arc))
+        profile_layout.addRow("Target: Zen profile", self._path_row(self.zen_combo, self.browse_zen))
         layout.addWidget(profile_group)
 
-        options_group = QGroupBox("Migration Options")
+        options_group = QGroupBox("Choose What To Migrate")
         options_layout = QVBoxLayout(options_group)
         for checkbox in (
             self.core_check,
@@ -303,10 +303,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(options_group)
 
         danger_group = QGroupBox("Danger Zone")
+        danger_group.setStyleSheet(
+            """
+            QGroupBox {
+                background-color: #fff0f0;
+                border: 1px solid #f0b4b4;
+                border-radius: 6px;
+                margin-top: 12px;
+                padding: 12px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px;
+            }
+            """
+        )
         danger_layout = QVBoxLayout(danger_group)
-        danger_text = QLabel("Nuke mode clears the selected Zen profile before importing. Backups are written beside changed Zen files.")
-        danger_text.setWordWrap(True)
-        danger_layout.addWidget(danger_text)
         danger_layout.addWidget(self.nuke_check)
         layout.addWidget(danger_group)
 
@@ -327,7 +340,7 @@ class MainWindow(QMainWindow):
         return row
 
     def browse_arc(self):
-        selected = QFileDialog.getExistingDirectory(self, "Select Arc profile root")
+        selected = QFileDialog.getExistingDirectory(self, "Select Arc data folder")
         if selected:
             self.arc_combo.setEditText(selected)
 
