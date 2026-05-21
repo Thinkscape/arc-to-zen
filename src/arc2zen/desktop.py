@@ -18,7 +18,7 @@ if sys.stderr is None:
 try:
     import psutil
     from PySide6.QtCore import QThread, Qt, Signal
-    from PySide6.QtGui import QIcon
+    from PySide6.QtGui import QColor, QIcon, QPalette
     from PySide6.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -45,14 +45,20 @@ from .profile_paths import discover_arc_profiles, discover_zen_profiles, is_arc_
 
 
 APP_STYLESHEET = """
+QWidget {
+    color: #111827;
+}
+
 QMainWindow {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #e9edf2, stop:0.18 #f4f6f8, stop:1 #f6f7f9);
+    color: #111827;
 }
 
 QWidget#Root {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #e9edf2, stop:0.18 #f4f6f8, stop:1 #f6f7f9);
+    color: #111827;
 }
 
 QFrame#CardPanel,
@@ -81,22 +87,38 @@ QLabel {
 }
 
 QComboBox,
+QLineEdit,
 QTextEdit {
     background: #ffffff;
     border: 1px solid #cfd5df;
     border-radius: 8px;
+    color: #111827;
     padding: 7px 10px;
     selection-background-color: #dbeafe;
+    selection-color: #111827;
 }
 
 QComboBox:focus,
+QLineEdit:focus,
 QTextEdit:focus {
     border-color: #3b82f6;
+}
+
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #cfd5df;
+    selection-background-color: #dbeafe;
+    selection-color: #111827;
 }
 
 QCheckBox {
     spacing: 8px;
     color: #1f2937;
+}
+
+QCheckBox:disabled {
+    color: #6b7280;
 }
 
 QPushButton {
@@ -135,6 +157,7 @@ QProgressBar {
     background: #e5e7eb;
     border: 0;
     border-radius: 6px;
+    color: #111827;
     height: 10px;
     text-align: center;
 }
@@ -176,6 +199,99 @@ def resource_path(*parts: str) -> Path:
     return Path(__file__).resolve().parent.joinpath(*parts)
 
 
+def apply_light_theme(app: QApplication) -> None:
+    """Keep the custom light UI readable even when the OS is in dark mode."""
+    app.setStyle("Fusion")
+
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, QColor("#f4f6f8"))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor("#111827"))
+    palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f3f4f6"))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#111827"))
+    palette.setColor(QPalette.ColorRole.Text, QColor("#111827"))
+    palette.setColor(QPalette.ColorRole.Button, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor("#111827"))
+    palette.setColor(QPalette.ColorRole.BrightText, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.Link, QColor("#2563eb"))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor("#dbeafe"))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#111827"))
+
+    disabled_text = QColor("#9ca3af")
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_text)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_text)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_text)
+
+    if hasattr(QPalette.ColorRole, "PlaceholderText"):
+        palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("#6b7280"))
+
+    app.setPalette(palette)
+
+
+def force_macos_light_appearance() -> bool:
+    if sys.platform != "darwin":
+        return False
+
+    try:
+        import ctypes
+
+        objc_path = find_library("objc")
+        if not objc_path:
+            return False
+
+        objc = ctypes.cdll.LoadLibrary(objc_path)
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+        def selector(name: str) -> int:
+            return objc.sel_registerName(name.encode("utf-8"))
+
+        def send(obj: int, name: str, restype=ctypes.c_void_p, argtypes=None, *args):
+            if argtypes is None:
+                argtypes = []
+            objc.objc_msgSend.restype = restype
+            objc.objc_msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p, *argtypes]
+            return objc.objc_msgSend(obj, selector(name), *args)
+
+        ns_application = objc.objc_getClass(b"NSApplication")
+        ns_string = objc.objc_getClass(b"NSString")
+        ns_appearance = objc.objc_getClass(b"NSAppearance")
+        ns_app = send(ns_application, "sharedApplication")
+        if not ns_app:
+            return False
+
+        appearance = None
+        for name in (b"NSAppearanceNameAqua", b"Aqua"):
+            appearance_name = send(
+                ns_string,
+                "stringWithUTF8String:",
+                ctypes.c_void_p,
+                [ctypes.c_char_p],
+                name,
+            )
+            appearance = send(
+                ns_appearance,
+                "appearanceNamed:",
+                ctypes.c_void_p,
+                [ctypes.c_void_p],
+                appearance_name,
+            )
+            if appearance:
+                break
+
+        if not appearance:
+            return False
+
+        send(ns_app, "setAppearance:", None, [ctypes.c_void_p], appearance)
+        return True
+    except Exception:
+        logging.getLogger(__name__).debug("Could not force macOS light appearance", exc_info=True)
+        return False
+
+
 def polish_macos_window(window: QMainWindow) -> bool:
     if sys.platform != "darwin":
         return False
@@ -207,6 +323,28 @@ def polish_macos_window(window: QMainWindow) -> bool:
         ns_window = send(ns_view, "window")
         if not ns_window:
             return False
+
+        ns_string = objc.objc_getClass(b"NSString")
+        ns_appearance = objc.objc_getClass(b"NSAppearance")
+        for name in (b"NSAppearanceNameAqua", b"Aqua"):
+            appearance_name = send(
+                ns_string,
+                "stringWithUTF8String:",
+                ctypes.c_void_p,
+                [ctypes.c_char_p],
+                name,
+            )
+            appearance = send(
+                ns_appearance,
+                "appearanceNamed:",
+                ctypes.c_void_p,
+                [ctypes.c_void_p],
+                appearance_name,
+            )
+            if appearance:
+                send(ns_window, "setAppearance:", None, [ctypes.c_void_p], appearance)
+                send(ns_view, "setAppearance:", None, [ctypes.c_void_p], appearance)
+                break
 
         ns_color = objc.objc_getClass(b"NSColor")
         background = send(
@@ -539,10 +677,13 @@ class MainWindow(QMainWindow):
 
 
 def main() -> int:
+    QApplication.setDesktopSettingsAware(False)
     QApplication.setApplicationName("Arc to Zen")
     QApplication.setOrganizationName("Thinkscape")
     app = QApplication(sys.argv)
+    force_macos_light_appearance()
     app.setWindowIcon(QIcon(str(resource_path("assets", "app-icon.png"))))
+    apply_light_theme(app)
     app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
     window.show()
