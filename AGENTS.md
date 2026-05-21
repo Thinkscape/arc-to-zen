@@ -7,6 +7,15 @@ into Zen Browser on macOS.
 
 Zen must be closed before any command that writes Zen profile files.
 
+Desktop UI:
+
+```bash
+pip install -r requirements-desktop.txt
+python desktop_app.py
+```
+
+CLI equivalent:
+
 ```bash
 python src/arc_pinned_tab_extractor.py
 python zen_sessions_importer_v4.py --nuke
@@ -27,6 +36,21 @@ Use `--nuke-only` to perform only that cleanup.
   - Exports Arc spaces, pinned tabs, temporary/unpinned tabs, essential tabs,
     folders, icons, and a basic color field.
   - Writes `arc_pinned_tabs_export.json`, which is ignored by Git.
+
+- `src/profile_paths.py`
+  - Discovers and validates Arc/Zen profile paths across supported platforms.
+  - Arc scans macOS Application Support and Windows Store-package roots.
+  - Zen scans macOS Application Support, Windows AppData, Linux tarball/AppImage
+    `~/.zen`, and both documented/manifest-derived Flatpak roots.
+  - Parses Zen `profiles.ini` and `installs.ini` before falling back to profile
+    directories containing `zen-sessions.jsonlz4`.
+
+- `desktop_app.py`
+  - PySide6 GUI wrapper around the CLI scripts.
+  - Lets users pick Arc/Zen profiles, optional migration steps, and nuke mode.
+  - Confirms pending parameters, closes Zen before running, then streams CLI
+    progress into the UI.
+  - Uses a temporary export file so GUI runs do not leave `arc_pinned_tabs_export.json`.
 
 - `zen_sessions_importer_v4.py`
   - Reads `arc_pinned_tabs_export.json`.
@@ -85,12 +109,14 @@ Syntax check:
 
 ```bash
 python -m py_compile \
+  src/profile_paths.py \
   src/arc_pinned_tab_extractor.py \
   zen_sessions_importer_v4.py \
   migrate_arc_favicons.py \
   sync_arc_folder_states.py \
   sync_arc_workspace_icons.py \
-  sync_arc_workspace_themes.py
+  sync_arc_workspace_themes.py \
+  desktop_app.py
 ```
 
 Run the theme/icon/folder/favicon sync scripts twice to check idempotence; the

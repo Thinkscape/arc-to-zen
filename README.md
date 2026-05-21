@@ -30,7 +30,8 @@ Not supported:
 - Arc Boosts, Easels, and other Arc-only features.
 - Full browsing history.
 - Folder colors/icons beyond Zen's supported folder state.
-- Cross-platform paths outside macOS.
+- Auto-discovery for Arc desktop on Linux, because Arc desktop is currently
+  known for macOS and Windows only.
 
 ## Requirements
 
@@ -39,14 +40,46 @@ Not supported:
 - Arc Browser profile data at `~/Library/Application Support/Arc`.
 - Zen Browser profile data at `~/Library/Application Support/zen`.
 - Zen Browser must be closed before writing session files.
+- For the desktop app: PySide6 and psutil from `requirements-desktop.txt`.
 
-Install the Python dependency:
+Install the Python dependencies:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+For the desktop app, install the desktop extras instead:
+
+```bash
+pip install -r requirements-desktop.txt
+```
+
+## Desktop App
+
+Launch the GUI:
+
+```bash
+python desktop_app.py
+```
+
+The desktop app provides a small cross-platform wrapper around the CLI scripts:
+
+- Auto-detects likely Arc and Zen profiles on the current OS.
+- Lets you browse for an Arc profile root and a Zen profile/root manually.
+- Lets you choose optional migration steps: favicons, folder open/closed state,
+  workspace icons, and workspace colors/themes.
+- Includes a dangerous nuke option to clear the selected Zen profile before
+  recreating data from Arc.
+- Shows a confirmation dialog with the pending source, target, selected steps,
+  and nuke setting before doing anything.
+- Checks whether Zen is running, asks to close it, and only starts migration
+  after Zen has exited.
+- Streams the same progress output as the CLI commands.
+
+The GUI writes the intermediate Arc export to a temporary directory and removes
+it when the run finishes.
 
 ## Quick Start
 
@@ -79,14 +112,15 @@ Zen files before writing.
 
 ## Profile Selection
 
-`zen_sessions_importer_v4.py` and the sync scripts resolve the Zen profile in
-this order:
+`desktop_app.py`, `zen_sessions_importer_v4.py`, and the sync scripts resolve
+the Zen profile in this order:
 
-1. `ZEN_PROFILE_PATH`, if set.
-2. `ZEN_PROFILE_NAME`, matched against profile directory names.
-3. Zen's `installs.ini` default profile.
-4. Zen's `profiles.ini` default profile.
-5. The first profile containing `zen-sessions.jsonlz4`.
+1. Explicit `--zen-profile` argument or GUI selection.
+2. `ZEN_PROFILE_PATH`, if set.
+3. `ZEN_PROFILE_NAME`, matched against profile directory names.
+4. Zen's `installs.ini` default profile.
+5. Zen's `profiles.ini` default profile.
+6. The first discovered profile containing `zen-sessions.jsonlz4`.
 
 Examples:
 
@@ -94,6 +128,26 @@ Examples:
 ZEN_PROFILE_NAME="Default" python zen_sessions_importer_v4.py --nuke
 ZEN_PROFILE_PATH="$HOME/Library/Application Support/zen/Profiles/xxxxxxxx.Default" python sync_arc_workspace_themes.py
 ```
+
+Arc profile selection works similarly:
+
+```bash
+ARC_PROFILE_PATH="$HOME/Library/Application Support/Arc" python src/arc_pinned_tab_extractor.py
+python src/arc_pinned_tab_extractor.py --arc-profile "$HOME/Library/Application Support/Arc"
+```
+
+The scanner checks:
+
+- Arc macOS: `~/Library/Application Support/Arc`
+- Arc Windows: `%LOCALAPPDATA%\Packages\TheBrowserCompany.Arc_*\LocalCache\Local\Arc`
+- Zen macOS: `~/Library/Application Support/zen`
+- Zen Windows: `%APPDATA%\zen`
+- Zen Linux tarball/AppImage: `~/.zen`
+- Zen Linux Flatpak candidates: `~/.var/app/app.zen_browser.zen/zen` and
+  `~/.var/app/app.zen_browser.zen/.zen`
+
+Arc desktop Linux is not scanned by default because current evidence points to
+Arc desktop being macOS/Windows only.
 
 ## Commands
 
@@ -182,8 +236,11 @@ Workspaces without an Arc theme are left unchanged/default.
 arc-to-zen/
 ├── README.md
 ├── requirements.txt
+├── requirements-desktop.txt
+├── desktop_app.py
 ├── src/
-│   └── arc_pinned_tab_extractor.py
+│   ├── arc_pinned_tab_extractor.py
+│   └── profile_paths.py
 ├── zen_sessions_importer_v4.py
 ├── migrate_arc_favicons.py
 ├── sync_arc_folder_states.py
@@ -202,6 +259,8 @@ Arc data sources:
   sidebar items, folders, tabs, icons, and workspace themes.
 - `StorableWindows.json` contains expanded/collapsed sidebar state.
 - `User Data/Default/Favicons` contains Chromium favicon bitmaps.
+- `User Data/Profile */Favicons` is also scanned for non-default Chromium
+  profiles.
 
 Zen data targets:
 
@@ -215,6 +274,14 @@ Zen data targets:
 
 Zen's compressed JSON files use Mozilla LZ4 framing: an 8-byte magic header,
 a 4-byte little-endian uncompressed size, then an LZ4 block.
+
+Profile path references used by the scanner:
+
+- [Zen Linux install docs](https://docs.zen-browser.app/guides/install-linux)
+- [Zen Window Sync & Recovery docs](https://docs.zen-browser.app/user-manual/window-sync)
+- [Zen session manager source](https://github.com/zen-browser/desktop/blob/dev/src/zen/sessionstore/ZenSessionManager.sys.mjs)
+- [Zen Flatpak manifest](https://github.com/zen-browser/desktop/blob/dev/build/flatpak/app.zen_browser.zen.yml.template)
+- [ArcEscape Arc export path notes](https://arcescape.com/blog/how-to-export-arc-browser-bookmarks)
 
 ## Safety
 
@@ -235,12 +302,14 @@ Run a syntax check:
 
 ```bash
 python -m py_compile \
+  src/profile_paths.py \
   src/arc_pinned_tab_extractor.py \
   zen_sessions_importer_v4.py \
   migrate_arc_favicons.py \
   sync_arc_folder_states.py \
   sync_arc_workspace_icons.py \
-  sync_arc_workspace_themes.py
+  sync_arc_workspace_themes.py \
+  desktop_app.py
 ```
 
 The scripts are intentionally small and direct. The importer owns the Zen session
