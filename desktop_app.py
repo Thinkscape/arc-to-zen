@@ -10,6 +10,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from ctypes.util import find_library
 from typing import Callable
 
 # PyInstaller windowed builds on Windows can start with no console streams.
@@ -205,6 +206,58 @@ class WorkerLogHandler(logging.Handler):
             self.emit_line(clean_log_line(self.format(record)))
         except Exception:
             self.handleError(record)
+
+
+def polish_macos_window(window: QMainWindow) -> bool:
+    if sys.platform != "darwin":
+        return False
+
+    try:
+        import ctypes
+
+        objc_path = find_library("objc")
+        if not objc_path:
+            return False
+
+        objc = ctypes.cdll.LoadLibrary(objc_path)
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+        def selector(name: str) -> int:
+            return objc.sel_registerName(name.encode("utf-8"))
+
+        def send(obj: int, name: str, restype=ctypes.c_void_p, argtypes=None, *args):
+            if argtypes is None:
+                argtypes = []
+            objc.objc_msgSend.restype = restype
+            objc.objc_msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p, *argtypes]
+            return objc.objc_msgSend(obj, selector(name), *args)
+
+        ns_view = int(window.winId())
+        ns_window = send(ns_view, "window")
+        if not ns_window:
+            return False
+
+        ns_color = objc.objc_getClass(b"NSColor")
+        background = send(
+            ns_color,
+            "colorWithCalibratedRed:green:blue:alpha:",
+            ctypes.c_void_p,
+            [ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double],
+            0.914,
+            0.929,
+            0.949,
+            1.0,
+        )
+
+        send(ns_window, "setTitlebarAppearsTransparent:", None, [ctypes.c_bool], True)
+        send(ns_window, "setBackgroundColor:", None, [ctypes.c_void_p], background)
+        return True
+    except Exception:
+        logging.getLogger(__name__).debug("Could not apply macOS window polish", exc_info=True)
+        return False
 
 
 def zen_processes() -> list[psutil.Process]:
@@ -434,6 +487,9 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(root)
 
+    def apply_platform_window_polish(self) -> None:
+        polish_macos_window(self)
+
     def _card(self, title: str, danger: bool = False) -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
         frame.setObjectName("DangerPanel" if danger else "CardPanel")
@@ -598,6 +654,7 @@ def main() -> int:
     app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
     window.show()
+    window.apply_platform_window_polish()
     return app.exec()
 
 
