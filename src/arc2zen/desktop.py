@@ -310,7 +310,7 @@ class MainWindow(QMainWindow):
         self.workspace_themes_check.setChecked(True)
         self.skip_orphaned_check = QCheckBox('Skip "Orphaned" workspace')
         self.skip_orphaned_check.setChecked(True)
-        self.skip_orphaned_check.setToolTip("Skips Arc essential tabs that could not be matched to a real workspace.")
+        self.skip_orphaned_check.setToolTip("Avoids creating a synthetic Orphaned workspace; unmatched Essentials are kept in the first workspace.")
         self.backups_check = QCheckBox("Create backups for changed files")
         self.backups_check.setChecked(True)
         self.auto_close_zen_check = QCheckBox("Automatically close Zen if open")

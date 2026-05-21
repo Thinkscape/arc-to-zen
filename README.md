@@ -83,7 +83,7 @@ Useful switches:
 
 - `--arc-profile PATH`
 - `--zen-profile PATH`
-- `--include-orphaned`
+- `--include-orphaned` creates a separate workspace for unmatched Essentials
 - `--no-backups`
 - `--no-favicons`
 - `--no-folder-states`

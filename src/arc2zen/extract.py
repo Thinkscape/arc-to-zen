@@ -355,11 +355,12 @@ class ArcPinnedTabExtractor:
                     space.pinned_tabs.extend(essential_tabs)
                     logger.info(f"    ⭐ Added {len(essential_tabs)} Essential tabs to {space.space_name}")
 
-            # Handle orphaned Essential tabs by creating a new "Orphaned" space
+            # Handle orphaned Essential tabs by either creating a new "Orphaned"
+            # space or preserving the tabs in the first real Arc workspace.
             if "orphaned" in essential_tabs_by_space:
                 orphaned_tabs = essential_tabs_by_space["orphaned"]
                 if orphaned_tabs:
-                    logger.info(f"  📦 Found {len(orphaned_tabs)} orphaned Essential tabs from inactive profiles")
+                    logger.info(f"  📦 Found {len(orphaned_tabs)} Essential tabs that did not match a workspace profile")
 
                     if include_orphaned:
                         # Create a new "Orphaned" space for these tabs.
@@ -376,10 +377,52 @@ class ArcPinnedTabExtractor:
                         logger.info(f"    ⭐ Created new 'Orphaned' space with {len(orphaned_tabs)} Essential tabs")
                         logger.info(f"    💡 These tabs will appear in a separate 'Orphaned' workspace in Zen")
                     else:
-                        logger.info(f"    ⏭️ Skipping 'Orphaned' workspace with {len(orphaned_tabs)} Essential tabs")
+                        if self._preserve_orphaned_essentials_in_fallback_space(orphaned_tabs, arc_spaces, spaces_info):
+                            logger.info(f"    ✅ Preserved {len(orphaned_tabs)} Essential tabs without creating an 'Orphaned' workspace")
+                        else:
+                            logger.info(f"    ⏭️ Skipping 'Orphaned' workspace with {len(orphaned_tabs)} Essential tabs")
 
         logger.info(f"Found {len(arc_spaces)} spaces with pinned tabs")
         return arc_spaces
+
+    def _preserve_orphaned_essentials_in_fallback_space(
+        self,
+        orphaned_tabs: List[ArcPinnedTab],
+        arc_spaces: List[ArcSpace],
+        spaces_info: Dict,
+    ) -> bool:
+        """Keep unmatched Essential tabs when the synthetic Orphaned space is disabled."""
+        if not orphaned_tabs:
+            return True
+
+        if not arc_spaces:
+            first_space = next(iter(spaces_info.items()), None)
+            if not first_space:
+                return False
+
+            space_id, space_info = first_space
+            arc_spaces.append(
+                ArcSpace(
+                    space_id=space_id,
+                    space_name=space_info["name"],
+                    pinned_tabs=[],
+                    folders=[],
+                    icon=space_info.get("icon"),
+                    color=space_info.get("color"),
+                )
+            )
+
+        fallback_space = arc_spaces[0]
+        start_index = len(fallback_space.pinned_tabs)
+        for offset, tab in enumerate(orphaned_tabs):
+            tab.space_id = fallback_space.space_id
+            tab.space_name = fallback_space.space_name
+            tab.folder_path = []
+            tab.index = start_index + offset
+
+        fallback_space.pinned_tabs.extend(orphaned_tabs)
+        logger.info(f"    ⭐ Added unmatched Essential tabs to {fallback_space.space_name}")
+        return True
 
     def _extract_essential_tabs_distributed(self, data: Dict, spaces_info: Dict) -> Dict[str, List[ArcPinnedTab]]:
         """Extract Essential tabs from topApps containers and distribute them to appropriate spaces.
