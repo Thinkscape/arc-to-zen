@@ -19,7 +19,7 @@ try:
         QComboBox,
         QFileDialog,
         QFormLayout,
-        QGroupBox,
+        QFrame,
         QHBoxLayout,
         QLabel,
         QMainWindow,
@@ -39,6 +39,105 @@ from src.profile_paths import discover_arc_profiles, discover_zen_profiles, is_a
 
 
 REPO_ROOT = Path(__file__).resolve().parent
+APP_STYLESHEET = """
+QWidget#Root {
+    background: #f6f7f9;
+}
+
+QFrame#CardPanel,
+QFrame#DangerPanel {
+    border-radius: 12px;
+    border: 1px solid #d9dde5;
+}
+
+QFrame#CardPanel {
+    background: #ffffff;
+}
+
+QFrame#DangerPanel {
+    background: #fff1f1;
+    border-color: #efc2c2;
+}
+
+QLabel[role="cardTitle"] {
+    color: #111827;
+    font-size: 15px;
+    font-weight: 650;
+}
+
+QLabel {
+    color: #374151;
+}
+
+QComboBox,
+QTextEdit {
+    background: #ffffff;
+    border: 1px solid #cfd5df;
+    border-radius: 8px;
+    padding: 7px 10px;
+    selection-background-color: #dbeafe;
+}
+
+QComboBox:focus,
+QTextEdit:focus {
+    border-color: #3b82f6;
+}
+
+QCheckBox {
+    spacing: 8px;
+    color: #1f2937;
+}
+
+QPushButton {
+    background: #ffffff;
+    border: 1px solid #cfd5df;
+    border-radius: 8px;
+    color: #111827;
+    padding: 8px 14px;
+}
+
+QPushButton:hover {
+    background: #f3f4f6;
+}
+
+QPushButton:pressed {
+    background: #e5e7eb;
+}
+
+QPushButton:disabled {
+    color: #9ca3af;
+    background: #f3f4f6;
+}
+
+QPushButton#PrimaryButton {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#PrimaryButton:hover {
+    background: #1d4ed8;
+}
+
+QProgressBar {
+    background: #e5e7eb;
+    border: 0;
+    border-radius: 6px;
+    height: 10px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: #2563eb;
+    border-radius: 6px;
+}
+
+QTextEdit {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+"""
 ZEN_PROCESS_NAMES = {
     "zen",
     "zen.exe",
@@ -269,6 +368,7 @@ class MainWindow(QMainWindow):
         self.log.setReadOnly(True)
 
         self.run_button = QPushButton("Start Migration")
+        self.run_button.setObjectName("PrimaryButton")
         self.run_button.clicked.connect(self.start_migration)
 
         self._build_ui()
@@ -282,16 +382,22 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self):
         root = QWidget()
+        root.setObjectName("Root")
         layout = QVBoxLayout(root)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(14)
 
-        profile_group = QGroupBox("Profiles")
-        profile_layout = QFormLayout(profile_group)
+        profile_card, profile_body = self._card("Profiles")
+        profile_layout = QFormLayout()
+        profile_layout.setContentsMargins(0, 0, 0, 0)
+        profile_layout.setHorizontalSpacing(18)
+        profile_layout.setVerticalSpacing(12)
         profile_layout.addRow("Source: Arc data folder", self._path_row(self.arc_combo, self.browse_arc))
         profile_layout.addRow("Target: Zen profile", self._path_row(self.zen_combo, self.browse_zen))
-        layout.addWidget(profile_group)
+        profile_body.addLayout(profile_layout)
+        layout.addWidget(profile_card)
 
-        options_group = QGroupBox("Choose What To Migrate")
-        options_layout = QVBoxLayout(options_group)
+        options_card, options_layout = self._card("Choose what to migrate")
         for checkbox in (
             self.core_check,
             self.favicons_check,
@@ -300,25 +406,37 @@ class MainWindow(QMainWindow):
             self.workspace_themes_check,
         ):
             options_layout.addWidget(checkbox)
-        layout.addWidget(options_group)
+        layout.addWidget(options_card)
 
-        danger_group = QGroupBox("Danger Zone")
-        danger_layout = QVBoxLayout(danger_group)
-        danger_layout.setContentsMargins(
-            options_layout.contentsMargins().left(),
-            options_layout.contentsMargins().top(),
-            options_layout.contentsMargins().right(),
-            options_layout.contentsMargins().bottom(),
-        )
+        danger_card, danger_layout = self._card("Danger Zone", danger=True)
         danger_layout.addWidget(self.nuke_check)
-        danger_group.setStyleSheet("QGroupBox { background-color: #fff0f0; }")
-        layout.addWidget(danger_group)
+        layout.addWidget(danger_card)
 
         layout.addWidget(self.progress)
         layout.addWidget(self.log, stretch=1)
         layout.addWidget(self.run_button, alignment=Qt.AlignRight)
 
         self.setCentralWidget(root)
+
+    def _card(self, title: str, danger: bool = False) -> tuple[QFrame, QVBoxLayout]:
+        frame = QFrame()
+        frame.setObjectName("DangerPanel" if danger else "CardPanel")
+        frame.setFrameShape(QFrame.NoFrame)
+
+        outer_layout = QVBoxLayout(frame)
+        outer_layout.setContentsMargins(18, 16, 18, 16)
+        outer_layout.setSpacing(12)
+
+        title_label = QLabel(title)
+        title_label.setProperty("role", "cardTitle")
+        outer_layout.addWidget(title_label)
+
+        body_layout = QVBoxLayout()
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        outer_layout.addLayout(body_layout)
+
+        return frame, body_layout
 
     def _path_row(self, combo: QComboBox, browse_callback) -> QWidget:
         row = QWidget()
@@ -466,7 +584,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setStyle("Fusion")
+    app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
     window.show()
     return app.exec()
