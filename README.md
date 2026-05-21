@@ -41,6 +41,7 @@ Not supported:
 - Zen Browser profile data at `~/Library/Application Support/zen`.
 - Zen Browser must be closed before writing session files.
 - For the desktop app: PySide6 and psutil from `requirements-desktop.txt`.
+- For local desktop binary builds: PyInstaller from `requirements-build.txt`.
 
 Install the Python dependencies:
 
@@ -64,7 +65,8 @@ Launch the GUI:
 python desktop_app.py
 ```
 
-The desktop app provides a small cross-platform wrapper around the CLI scripts:
+The desktop app provides a small cross-platform wrapper around the migration
+modules:
 
 - Auto-detects likely Arc and Zen profiles on the current OS.
 - Lets you browse for an Arc profile root and a Zen profile/root manually.
@@ -76,10 +78,56 @@ The desktop app provides a small cross-platform wrapper around the CLI scripts:
   and nuke setting before doing anything.
 - Checks whether Zen is running, asks to close it, and only starts migration
   after Zen has exited.
-- Streams the same progress output as the CLI commands.
+- Streams progress output while each migration step runs.
 
 The GUI writes the intermediate Arc export to a temporary directory and removes
 it when the run finishes.
+
+## Desktop Binary Builds
+
+Install build dependencies:
+
+```bash
+pip install -r requirements-build.txt
+```
+
+Build a one-file executable for the current OS:
+
+```bash
+python scripts/build_desktop.py --version dev
+```
+
+The build script uses PyInstaller and writes release archives into
+`release-artifacts/`:
+
+- Windows: `arc-to-zen-<version>-windows-x64.zip`, containing `arc-to-zen.exe`.
+- macOS/Linux: `arc-to-zen-<version>-<platform>.tar.gz`, containing the
+  `arc-to-zen` executable.
+
+The project does not cross-compile. Build each platform on a matching OS, which
+is what the release GitHub Action does.
+
+## Release Process
+
+Normal development lands on `main` through regular commits and pull requests.
+The CI workflow runs a Python syntax check on every push to `main` and every
+pull request.
+
+To publish downloadable desktop binaries:
+
+```bash
+git checkout main
+git pull origin main
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`. The workflow builds
+Linux x64, Windows x64, macOS x64, and macOS arm64 executables, then creates or
+updates the matching GitHub Release with the generated archives attached.
+
+The release workflow can also be run manually from GitHub Actions with an
+existing tag name.
 
 ## Quick Start
 
@@ -237,8 +285,16 @@ arc-to-zen/
 ├── README.md
 ├── requirements.txt
 ├── requirements-desktop.txt
+├── requirements-build.txt
 ├── desktop_app.py
+├── scripts/
+│   └── build_desktop.py
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── release.yml
 ├── src/
+│   ├── __init__.py
 │   ├── arc_pinned_tab_extractor.py
 │   └── profile_paths.py
 ├── zen_sessions_importer_v4.py
@@ -249,7 +305,8 @@ arc-to-zen/
 ```
 
 Generated files such as `arc_pinned_tabs_export.json`, local virtualenvs,
-Python bytecode, local snapshots, and Zen backup files are ignored by Git.
+Python bytecode, local snapshots, PyInstaller build output, release archives,
+and Zen backup files are ignored by Git.
 
 ## Technical Notes
 
@@ -309,7 +366,8 @@ python -m py_compile \
   sync_arc_folder_states.py \
   sync_arc_workspace_icons.py \
   sync_arc_workspace_themes.py \
-  desktop_app.py
+  desktop_app.py \
+  scripts/build_desktop.py
 ```
 
 The scripts are intentionally small and direct. The importer owns the Zen session

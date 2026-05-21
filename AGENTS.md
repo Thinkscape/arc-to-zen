@@ -14,6 +14,13 @@ pip install -r requirements-desktop.txt
 python desktop_app.py
 ```
 
+Local one-file desktop build:
+
+```bash
+pip install -r requirements-build.txt
+python scripts/build_desktop.py --version dev
+```
+
 CLI equivalent:
 
 ```bash
@@ -46,11 +53,24 @@ Use `--nuke-only` to perform only that cleanup.
     directories containing `zen-sessions.jsonlz4`.
 
 - `desktop_app.py`
-  - PySide6 GUI wrapper around the CLI scripts.
+  - PySide6 GUI wrapper around the migration modules.
   - Lets users pick Arc/Zen profiles, optional migration steps, and nuke mode.
-  - Confirms pending parameters, closes Zen before running, then streams CLI
-    progress into the UI.
+  - Confirms pending parameters, closes Zen before running, then streams
+    migration progress into the UI.
   - Uses a temporary export file so GUI runs do not leave `arc_pinned_tabs_export.json`.
+
+- `scripts/build_desktop.py`
+  - Builds a PyInstaller one-file executable for the current OS.
+  - Packages the executable into `release-artifacts/`.
+  - Uses native builds, not cross-compilation.
+
+- `.github/workflows/ci.yml`
+  - Runs the Python syntax check on pushes to `main` and pull requests.
+
+- `.github/workflows/release.yml`
+  - Runs on pushed `v*` tags or manual dispatch for an existing tag.
+  - Builds Linux x64, Windows x64, macOS x64, and macOS arm64 artifacts.
+  - Creates or updates the matching GitHub Release with the build archives.
 
 - `zen_sessions_importer_v4.py`
   - Reads `arc_pinned_tabs_export.json`.
@@ -116,7 +136,17 @@ python -m py_compile \
   sync_arc_folder_states.py \
   sync_arc_workspace_icons.py \
   sync_arc_workspace_themes.py \
-  desktop_app.py
+  desktop_app.py \
+  scripts/build_desktop.py
+```
+
+Release a new version:
+
+```bash
+git checkout main
+git pull origin main
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 Run the theme/icon/folder/favicon sync scripts twice to check idempotence; the
